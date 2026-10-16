@@ -1,0 +1,38 @@
+# ============ Python ============
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# ============ 构建产物 ============
+# build/ 是 PyInstaller 与启动器的中间产物；
+# dist/ 是打包出来的 exe —— 它是发布物，请挂到 GitHub Releases，不要提交进仓库
+# （单文件约 16 MB，提交进去会让仓库历史迅速膨胀）。
+build/
+dist/
+wheels/
+
+# PyInstaller 在仓库根目录自动生成的 spec（项目的正式 spec 在 packaging/ 下，要提交）
+/*.spec
+*.res
+*.manifest
+
+# ============ 测试与类型检查缓存 ============
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# ============ 本机 / 编辑器 / 系统 ============
+# .workbuddy/ 是本地 AI 助手的工作区（记忆与日志），与项目源码无关
+# 注意：.gitignore 不支持行尾注释，注释必须单独占一行，否则整行会被当成模式
+.workbuddy/
+.vscode/
+.idea/
+*.lnk
+*.log
+Thumbs.db
+desktop.ini
+.DS_Store

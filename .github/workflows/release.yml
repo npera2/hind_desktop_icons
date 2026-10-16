@@ -1,0 +1,105 @@
+name: Release
+
+# 打 tag（形如 v0.1.0）即自动构建单文件 exe 并发布到 GitHub Releases；
+# 也可以在 Actions 页面手动触发（workflow_dispatch）填一个版本号。
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "要发布的版本号，例如 v0.1.0"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 解析版本号
+        id: ver
+        shell: pwsh
+        run: |
+          $raw = if ("${{ github.ref_type }}" -eq "tag") { "${{ github.ref_name }}" } else { "${{ inputs.tag }}" }
+          $version = $raw -replace '^v', ''
+          if ($version -notmatch '^\d+(\.\d+)*$') {
+            throw "版本号格式不正确：$raw（应为 v1.2.3 这种形式）"
+          }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          Write-Host "本次发布版本：$version"
+
+      - name: 安装 uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: 安装 MinGW 工具链（提供 gcc 与 windres）
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: false
+          install: mingw-w64-x86_64-gcc
+          path-type: inherit
+
+      - name: 安装依赖
+        run: uv sync
+
+      - name: 生成图标
+        run: uv run python tools/make_assets.py
+
+      - name: 构建单文件 exe
+        # 显式指向 mingw64 工具链：PATH 上可能还有 MSYS 目标的 gcc，
+        # 用它编出来的 exe 会依赖 msys-2.0.dll，离开 MSYS 就跑不起来。
+        run: >
+          uv run python tools/build_launcher.py
+          --version ${{ steps.ver.outputs.version }}
+          --gcc C:/msys64/mingw64/bin/gcc.exe
+          --windres C:/msys64/mingw64/bin/windres.exe
+
+      - name: 冒烟测试
+        shell: pwsh
+        run: |
+          # 1) 载荷能独立运行（真正的功能自检；CI 上没有桌面窗口，读到"未知"属正常）
+          & "build\payload_dist\DesktopIconToggle-portable\DesktopIconToggle.exe" --status
+          if ($LASTEXITCODE -ne 0) { throw "载荷自检失败，退出码 $LASTEXITCODE" }
+
+          # 2) 启动器能展开载荷并启动它（首次运行的完整链路）
+          & "dist\DesktopIconToggle.exe" --status
+          Start-Sleep -Seconds 5
+          $installed = Join-Path $env:LOCALAPPDATA "HindDesktopIcons\bin"
+          if (-not (Test-Path $installed)) { throw "启动器没有展开载荷" }
+          Get-ChildItem $installed | ForEach-Object { Write-Host "已展开：$_" }
+
+          # 3) 产物存在且体积合理
+          $exe = Get-Item "dist\DesktopIconToggle.exe"
+          if ($exe.Length -lt 5MB) { throw "exe 体积异常：$($exe.Length) 字节" }
+          Write-Host ("冒烟测试通过，exe 体积 {0:N2} MB" -f ($exe.Length / 1MB))
+
+      - name: 发布到 GitHub Releases
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = "v${{ steps.ver.outputs.version }}"
+          $asset = "dist/DesktopIconToggle.exe"
+
+          # 已存在同名 Release 时改为覆盖上传，重复执行不会失败
+          gh release view $tag 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "Release $tag 已存在，覆盖资产"
+            gh release upload $tag $asset --clobber
+          } else {
+            gh release create $tag $asset `
+              --title "DesktopIconToggle v${{ steps.ver.outputs.version }}" `
+              --generate-notes
+          }
+
+          gh release view $tag --json url,tagName,assets --jq '"Release: " + .url, (.assets[] | "资产: " + .name)'

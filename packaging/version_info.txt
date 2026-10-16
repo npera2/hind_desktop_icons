@@ -1,0 +1,32 @@
+VSVersionInfo(
+  ffi=FixedFileInfo(
+    filevers=(0, 1, 0, 0),
+    prodvers=(0, 1, 0, 0),
+    mask=0x3F,
+    flags=0x0,
+    OS=0x40004,
+    fileType=0x1,
+    subtype=0x0,
+    date=(0, 0)
+  ),
+  kids=[
+    StringFileInfo(
+      [
+        StringTable(
+          '080404B0',
+          [
+            StringStruct('CompanyName', 'personal'),
+            StringStruct('FileDescription', '桌面图标开关 - 一键隐藏/恢复桌面图标'),
+            StringStruct('FileVersion', '0.1.0.0'),
+            StringStruct('InternalName', 'DesktopIconToggle'),
+            StringStruct('LegalCopyright', ''),
+            StringStruct('OriginalFilename', 'DesktopIconToggle.exe'),
+            StringStruct('ProductName', '桌面图标开关'),
+            StringStruct('ProductVersion', '0.1.0.0')
+          ]
+        )
+      ]
+    ),
+    VarFileInfo([VarStruct('Translation', [2052, 1200])])
+  ]
+)
