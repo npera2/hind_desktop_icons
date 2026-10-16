@@ -222,6 +222,14 @@ def compile_launcher(rc_path: Path, build_id: str, gcc: Path, windres: Path) -> 
     res_path = rc_path.with_suffix(".res")
     out_exe = ROOT / "dist" / "DesktopIconToggle.exe"
 
+    # dist/ 是 gitignore 的构建输出目录，全新检出的仓库里并不存在——
+    # 必须自己创建，否则 gcc 链接时会报
+    # "cannot open output file ...\dist\DesktopIconToggle.exe: No such file or directory"。
+    try:
+        out_exe.parent.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise SystemExit(f"无法创建输出目录 {out_exe.parent}：{exc}")
+
     # windres 默认的预处理器是它自己目录下的 gcc，而 "C:\Program Files\..." 里的空格
     # 会让它拼出来的命令行断掉（'C:\Program' 不是内部或外部命令）。
     # 解法：把 mingw 的 bin 加进 PATH，用裸名 gcc 调起，并补上预处理参数

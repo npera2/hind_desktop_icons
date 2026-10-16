@@ -62,13 +62,12 @@ jobs:
         run: uv run python tools/make_assets.py
 
       - name: 构建单文件 exe
-        # 显式指向 mingw64 工具链：PATH 上可能还有 MSYS 目标的 gcc，
-        # 用它编出来的 exe 会依赖 msys-2.0.dll，离开 MSYS 就跑不起来。
+        # 刻意不写死编译器路径：runner 上预装的是 C:\mingw64\bin，
+        # setup-msys2 装的在 C:\msys64\mingw64\bin，脚本会自己找到能用的那个
+        # （顺序：PATH → 常见目录，并自动跳过 MSYS 目标的 gcc）。
         run: >
           uv run python tools/build_launcher.py
           --version ${{ steps.ver.outputs.version }}
-          --gcc C:/msys64/mingw64/bin/gcc.exe
-          --windres C:/msys64/mingw64/bin/windres.exe
 
       - name: 冒烟测试
         shell: pwsh

@@ -14,14 +14,24 @@ import sys
 
 
 def setup_console() -> None:
-    """放宽 stdout / stderr 的编码错误策略，避免打印中文时崩溃。"""
+    """放宽 stdout / stderr 的编码错误策略，并改成行缓冲。
+
+    * ``errors="replace"``：中文在非中文代码页下退化成 ``?``，而不是抛
+      ``UnicodeEncodeError`` 让脚本以退出码 1 结束。
+    * ``line_buffering=True``：输出被重定向到管道时（CI 日志、``| tail``），
+      Python 默认会块缓冲，导致脚本自己的 print 与子进程（gcc / windres）的输出
+      顺序错乱、看着像"错误发生在前、提示出现在后"。行缓冲让日志顺序可信。
+    """
     for name in ("stdout", "stderr"):
         stream = getattr(sys, name, None)
         reconfigure = getattr(stream, "reconfigure", None)
         if reconfigure is None:
             continue
         try:
-            reconfigure(errors="replace")
+            reconfigure(errors="replace", line_buffering=True)
         except (ValueError, OSError):
-            # 流不支持重配置（例如被替换成了自定义对象），忽略即可
-            pass
+            # 流不支持这些选项（例如被替换成了自定义对象），忽略即可
+            try:
+                reconfigure(errors="replace")
+            except (ValueError, OSError):
+                pass
