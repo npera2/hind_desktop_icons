@@ -16,6 +16,12 @@ on:
 permissions:
   contents: write
 
+env:
+  # 让所有 Python 步骤按 UTF-8 输出。runner 的默认代码页是 cp1252，
+  # 工具脚本里的中文 print 会直接抛 UnicodeEncodeError（这正是 v0.1.0 第一次失败的原因）。
+  # 工具脚本里另有 errors="replace" 兜底，两层保险。
+  PYTHONUTF8: "1"
+
 jobs:
   release:
     runs-on: windows-latest

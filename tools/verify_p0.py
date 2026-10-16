@@ -14,11 +14,13 @@ import sys
 import time
 import winreg
 from ctypes import wintypes
+from pathlib import Path
 
-if sys.stdout is None:
-    sys.stdout = open("nul", "w", encoding="utf-8")
-else:
-    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from _console import setup_console  # noqa: E402
+
+setup_console()
 
 user32 = ctypes.WinDLL("user32", use_last_error=True)
 

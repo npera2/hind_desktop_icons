@@ -25,6 +25,12 @@ import sys
 import time
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from _console import setup_console  # noqa: E402
+
+setup_console()
+
 ROOT = Path(__file__).resolve().parents[1]
 SPEC = ROOT / "packaging" / "DesktopIconToggle.spec"
 LAUNCHER_C = ROOT / "packaging" / "launcher.c"
@@ -53,41 +59,49 @@ APP_VERSION = "0.1.0"
 
 
 def find_tool(exe_name: str, explicit: str | None, flag: str) -> Path:
-    """定位 gcc / windres：显式指定 > PATH > 常见安装目录。"""
+    """定位 gcc / windres：显式指定 > PATH > 常见安装目录。
+
+    PATH 上可能混着 MSYS 目标的编译器（`C:\\msys64\\usr\\bin`），那种编出来的 exe
+    依赖 msys-2.0.dll，在普通 Windows 上跑不起来，所以这里会跳过它们继续找。
+    """
     if explicit:
         path = Path(explicit)
-        if not path.exists():
-            raise SystemExit(f"指定的工具不存在：{path}")
-        return _reject_msys_target(path, exe_name)
+        if path.exists():
+            if _is_msys_target(path):
+                raise SystemExit(
+                    f"{flag} 指向了 MSYS 环境目录：{path}\n"
+                    "用它构建的 exe 会依赖 msys-2.0.dll，在普通 Windows 上无法运行。\n"
+                    f"请改用 MinGW-w64 版本，例如 C:/msys64/mingw64/bin/{exe_name}"
+                )
+            return path
+        print(f"提示：{flag} 指定的 {path} 不存在，改为自动查找")
 
+    candidates: list[Path] = []
     found = shutil.which(exe_name)
     if found:
-        return _reject_msys_target(Path(found), exe_name)
+        candidates.append(Path(found))
+    candidates.extend(directory / exe_name for directory in TOOL_DIRS)
 
-    for directory in TOOL_DIRS:
-        candidate = directory / exe_name
-        if candidate.exists():
+    for candidate in candidates:
+        if candidate.exists() and not _is_msys_target(candidate):
             return candidate
+
+    if any(candidate.exists() for candidate in candidates):
+        raise SystemExit(
+            f"找到的 {exe_name} 都是 MSYS 目标的，不能用。\n"
+            f"请安装 MinGW-w64 工具链，或用 {flag} 指向它，例如 "
+            f"C:/msys64/mingw64/bin/{exe_name}"
+        )
 
     raise SystemExit(
         f"找不到 {exe_name}。请安装 MinGW-w64，或用 {flag} 指定它的完整路径。"
     )
 
 
-def _reject_msys_target(path: Path, exe_name: str) -> Path:
-    """拦掉 MSYS 目标的编译器。
-
-    C:\\msys64\\usr\\bin 下的是 MSYS 目标 gcc，用它编出来的 exe 会依赖 msys-2.0.dll，
-    离开 MSYS 环境就跑不起来。CI 上 PATH 里很容易混进这个，必须显式拦住。
-    """
+def _is_msys_target(path: Path) -> bool:
+    """判断是否为 MSYS 目标的编译器（C:\\msys64\\usr\\bin 下的那些）。"""
     lowered = str(path).lower().replace("/", "\\")
-    if "\\msys64\\usr\\bin" in lowered or "\\msys\\usr\\bin" in lowered:
-        raise SystemExit(
-            f"{exe_name} 指向了 MSYS 环境目录：{path}\n"
-            "用它构建的 exe 会依赖 msys-2.0.dll，在普通 Windows 上无法运行。\n"
-            f"请改用 MinGW-w64 版本，例如 C:/msys64/mingw64/bin/{exe_name}"
-        )
-    return path
+    return "\\msys64\\usr\\bin" in lowered or "\\msys\\usr\\bin" in lowered
 
 
 def run(cmd: list[str], *, cwd: Path | None = None, env: dict | None = None) -> None:

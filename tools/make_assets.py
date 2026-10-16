@@ -12,8 +12,12 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from _console import setup_console  # noqa: E402
 from hind_desktop_icons.tray import make_icon  # noqa: E402
+
+setup_console()
 
 ROOT = Path(__file__).resolve().parents[1]
 ICO_SIZES = [(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)]
