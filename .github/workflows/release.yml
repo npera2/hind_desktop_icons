@@ -72,19 +72,28 @@ jobs:
       - name: 冒烟测试
         shell: pwsh
         run: |
-          # 1) 载荷能独立运行（真正的功能自检；CI 上没有桌面窗口，读到"未知"属正常）
-          & "build\payload_dist\DesktopIconToggle-portable\DesktopIconToggle.exe" --status
-          if ($LASTEXITCODE -ne 0) { throw "载荷自检失败，退出码 $LASTEXITCODE" }
+          # 坑：PowerShell 用 & 调用 GUI 子系统的程序时**不会等待，也不设置 $LASTEXITCODE**，
+          # 于是 `$LASTEXITCODE -ne 0` 会因为空值而误判为失败（这个 exe 是 -mwindows，属 GUI）。
+          # 必须用 Start-Process -Wait -PassThru 才能拿到真实退出码。
+          function Test-Exe([string]$Path, [string]$Label) {
+            $full = Join-Path $PWD $Path
+            $p = Start-Process -FilePath $full -ArgumentList "--status" -Wait -PassThru
+            if ($p.ExitCode -ne 0) { throw "$Label 失败，退出码 $($p.ExitCode)" }
+            Write-Host "$Label 通过"
+          }
+
+          # 1) 载荷能独立运行（CI 上没有桌面图标，读到"未知"属正常）
+          Test-Exe "build\payload_dist\DesktopIconToggle-portable\DesktopIconToggle.exe" "载荷自检"
 
           # 2) 启动器能展开载荷并启动它（首次运行的完整链路）
-          & "dist\DesktopIconToggle.exe" --status
+          Test-Exe "dist\DesktopIconToggle.exe" "启动器自检"
           Start-Sleep -Seconds 5
           $installed = Join-Path $env:LOCALAPPDATA "HindDesktopIcons\bin"
           if (-not (Test-Path $installed)) { throw "启动器没有展开载荷" }
           Get-ChildItem $installed | ForEach-Object { Write-Host "已展开：$_" }
 
           # 3) 产物存在且体积合理
-          $exe = Get-Item "dist\DesktopIconToggle.exe"
+          $exe = Get-Item (Join-Path $PWD "dist\DesktopIconToggle.exe")
           if ($exe.Length -lt 5MB) { throw "exe 体积异常：$($exe.Length) 字节" }
           Write-Host ("冒烟测试通过，exe 体积 {0:N2} MB" -f ($exe.Length / 1MB))
 
@@ -93,6 +102,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # Actions 的 pwsh 步骤会设 $ErrorActionPreference = 'stop'。
+          # 下面要故意执行一条"会失败"的 gh 探测命令（Release 不存在时），
+          # 明确关掉原生命令的该行为，免得它被当成终止性错误。
+          $PSNativeCommandUseErrorActionPreference = $false
+
           $tag = "v${{ steps.ver.outputs.version }}"
           $asset = "dist/DesktopIconToggle.exe"
 
